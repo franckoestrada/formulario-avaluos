@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Registro de Avalúos</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to right, #f0f0f0, #d6e0f5);
+      padding: 30px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: 600;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+    button {
+      margin-top: 25px;
+      background-color: #3498db;
+      color: white;
+      padding: 14px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Registro de Avalúos</h2>
+    <form id="avaluoForm">
+      <label>Nombre de Usuario</label>
+      <input type="text" name="usuario" required />
+
+      <label>Folio de Solicitud</label>
+      <select name="folio">
+        <option value="whatsapp">WhatsApp</option>
+        <option value="e-mail">E-mail</option>
+        <option value="formulario">Formulario</option>
+      </select>
+
+      <label>No. de Avalúo</label>
+      <input type="text" name="avaluo" pattern="\d{4}/2025" placeholder="Ej. 1234/2025" required />
+
+      <label>Tipo de Avalúo</label>
+      <select name="tipo_avaluo">
+        <option value="REFERIDO">REFERIDO</option>
+        <option value="COMERCIAL">COMERCIAL</option>
+        <option value="OTRO">OTRO</option>
+      </select>
+
+      <label>Tipo de Inmueble</label>
+      <input type="text" name="tipo_inmueble" required />
+
+      <label>Referencia</label>
+      <input type="text" name="referencia" required />
+
+      <label>Ubicación</label>
+      <input type="text" name="ubicacion" required />
+
+      <label>Observación</label>
+      <textarea name="observacion"></textarea>
+
+      <label>Información adicional</label>
+      <input type="checkbox" name="antecedentes" value="Si" /> Antecedentes
+      <input type="checkbox" name="fotografias" value="Si" /> Fotografías
+      <input type="checkbox" name="entregado" value="Si" /> Entregado
+      <input type="checkbox" name="pagado" value="Si" /> Pagado
+
+      <button type="submit">Guardar Avalúo</button>
+    </form>
+    <p id="responseMessage" style="margin-top: 20px; font-weight: bold;"></p>
+  </div>
+
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycbzdKHBMu_hM4cvIJoJOBsnvJ6PlNm6iPR70kWpsPUW6DQLkbJfdbFJ_liX5MiSclqQ6/exec";
+    const form = document.getElementById('avaluoForm');
+    const responseMessage = document.getElementById('responseMessage');
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const formData = new FormData(form);
+
+      // Set default values for checkboxes
+      ["antecedentes", "fotografias", "entregado", "pagado"].forEach(field => {
+        if (!formData.has(field)) {
+          formData.append(field, "No");
+        }
+      });
+
+      // Add automatic date
+      const today = new Date().toISOString().split('T')[0];
+      formData.append("fecha", today);
+
+      fetch(scriptURL, { method: 'POST', body: formData })
+        .then(response => {
+          responseMessage.textContent = "✅ Registro guardado correctamente.";
+          form.reset();
+        })
+        .catch(error => {
+          responseMessage.textContent = "❌ Error al guardar. Intenta de nuevo.";
+        });
+    });
+  </script>
+</body>
+</html>
