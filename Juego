@@ -1,0 +1,372 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Catcher Arcade</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            touch-action: none;
+        }
+        /* Custom glow effects and styling */
+        .neon-glow {
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.4);
+        }
+        .neon-text {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(236, 72, 153, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center overflow-hidden select-none">
+
+    <div class="w-full max-w-md mx-auto p-4 flex flex-col h-[100dvh] justify-between">
+        
+        <!-- Header / Scores -->
+        <header class="flex justify-between items-center bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-2xl p-4 neon-glow">
+            <div>
+                <span class="text-xs uppercase tracking-wider text-slate-400 block">Puntuación</span>
+                <span id="score-display" class="text-2xl font-bold text-pink-400">0</span>
+            </div>
+            <div class="text-center">
+                <span class="text-xs uppercase tracking-wider text-slate-400 block">Vidas</span>
+                <div id="lives-display" class="text-xl flex gap-1 text-red-500">❤️❤️❤️</div>
+            </div>
+            <div class="text-right">
+                <span class="text-xs uppercase tracking-wider text-slate-400 block">Récord</span>
+                <span id="highscore-display" class="text-2xl font-bold text-amber-400">0</span>
+            </div>
+        </header>
+
+        <!-- Game Canvas Container -->
+        <div class="relative flex-1 my-4 bg-slate-900/50 backdrop-blur border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl flex items-center justify-center">
+            
+            <!-- Canvas -->
+            <canvas id="gameCanvas" class="w-full h-full block"></canvas>
+
+            <!-- Start / Pause / Game Over Overlay -->
+            <div id="overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10">
+                <h1 class="text-4xl font-extrabold mb-2 neon-text bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">NEON CATCHER</h1>
+                <p id="overlay-desc" class="text-slate-300 text-sm mb-6 max-w-xs">Atrapa los orbes energéticos brillantes y esquiva las bombas oscuras. ¡Usa los controles táctiles o las flechas!</p>
+                <button id="start-btn" onclick="startGame()" class="w-full max-w-xs bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-95 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition transform duration-150">
+                    ¡Comenzar Juego!
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls Help / Mobile Buttons -->
+        <footer class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 flex justify-between items-center gap-3">
+            <button id="left-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 py-3 rounded-xl font-bold text-lg flex items-center justify-center transition">
+                ◀
+            </button>
+            <span class="text-xs text-slate-400 font-medium text-center hidden sm:block">Usa flechas o botones</span>
+            <button id="right-btn" class="flex-1 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 py-3 rounded-xl font-bold text-lg flex items-center justify-center transition">
+                ▶
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        // --- Web Audio API Sound Synthesizer ---
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'catch') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                    gainNode.gain.setValueAtTime(0.15, now);
+                    gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'bomb') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.3);
+                    gainNode.gain.setValueAtTime(0.3, now);
+                    gainNode.gain.linearRampToValueAtTime(0, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'start') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.setValueAtTime(500, now + 0.1);
+                    gainNode.gain.setValueAtTime(0.2, now);
+                    gainNode.gain.linearRampToValueAtTime(0, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        // --- Game Setup & State Variables ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let lives = 3;
+        let highScore = localStorage.getItem('neon_catcher_highscore') || 0;
+        document.getElementById('highscore-display').innerText = highScore;
+
+        let gameRunning = false;
+        let animationFrameId = null;
+        let spawnTimer = 0;
+        let difficultyInterval = 0;
+
+        // Basket (Player)
+        let basket = {
+            x: 0,
+            y: 0,
+            w: 80,
+            h: 16,
+            speed: 10,
+            dx: 0
+        };
+
+        // Falling items array
+        let items = [];
+        let particles = [];
+
+        // Handle canvas sizing cleanly
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            basket.y = canvas.height - 40;
+            if (!gameRunning) {
+                basket.x = canvas.width / 2 - basket.w / 2;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Input Listeners ---
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys['left'] = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys['right'] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys['left'] = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys['right'] = false;
+        });
+
+        // Touch & Mouse buttons for mobile/desktop
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+
+        leftBtn.addEventListener('touchstart', () => keys['left'] = true);
+        leftBtn.addEventListener('touchend', () => keys['left'] = false);
+        leftBtn.addEventListener('mousedown', () => keys['left'] = true);
+        leftBtn.addEventListener('mouseup', () => keys['left'] = false);
+
+        rightBtn.addEventListener('touchstart', () => keys['right'] = true);
+        rightBtn.addEventListener('touchend', () => keys['right'] = false);
+        rightBtn.addEventListener('mousedown', () => keys['right'] = true);
+        rightBtn.addEventListener('mouseup', () => keys['right'] = false);
+
+        // Swipe or touch dragging on canvas directly
+        canvas.addEventListener('touchmove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const touchX = e.touches[0].clientX - rect.left;
+            basket.x = touchX - basket.w / 2;
+            e.preventDefault();
+        }, { passive: false });
+
+        // --- STREAMING_CHUNK:Implementing game entities and physics loop... ---
+        function startGame() {
+            initAudio();
+            playSound('start');
+            score = 0;
+            lives = 3;
+            items = [];
+            particles = [];
+            spawnTimer = 0;
+            difficultyInterval = 0;
+            updateUI();
+
+            document.getElementById('overlay').classList.add('hidden');
+            gameRunning = true;
+            basket.x = canvas.width / 2 - basket.w / 2;
+
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            playSound('bomb');
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('neon_catcher_highscore', highScore);
+                document.getElementById('highscore-display').innerText = highScore;
+            }
+
+            document.getElementById('overlay-desc').innerHTML = `¡Juego Terminado!<br>Puntuación final: <strong class="text-pink-400">${score}</strong>`;
+            document.getElementById('start-btn').innerText = 'Jugar de Nuevo';
+            document.getElementById('overlay').classList.remove('hidden');
+        }
+
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            let hearts = '';
+            for (let i = 0; i < lives; i++) hearts += '❤️';
+            document.getElementById('lives-display').innerText = hearts || '🖤';
+        }
+
+        // Spawn falling objects (Orbs vs Bombs)
+        function spawnItem() {
+            const isBomb = Math.random() < 0.22; // 22% chance of bomb
+            const radius = isBomb ? 14 : 12;
+            items.push({
+                x: Math.random() * (canvas.width - radius * 2) + radius,
+                y: -20,
+                radius: radius,
+                speed: Math.random() * 2 + 2.5 + (score * 0.03), // speeds up with score
+                isBomb: isBomb,
+                color: isBomb ? '#ef4444' : (Math.random() > 0.5 ? '#ec4899' : '#3b82f6')
+            });
+        }
+
+        // Particle explosion effect
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 6,
+                    dy: (Math.random() - 0.5) * 6,
+                    radius: Math.random() * 3 + 2,
+                    color: color,
+                    alpha: 1
+                });
+            }
+        }
+
+        // --- STREAMING_CHUNK:Writing the core render loop... ---
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // Clear canvas with subtle trail effect
+            ctx.fillStyle = 'rgba(2, 6, 23, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update Basket Position
+            if (keys['left']) basket.x -= basket.speed;
+            if (keys['right']) basket.x += basket.speed;
+
+            // Boundaries
+            if (basket.x < 0) basket.x = 0;
+            if (basket.x + basket.w > canvas.width) basket.x = canvas.width - basket.w;
+
+            // Draw Basket with Neon Glow
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#a855f7';
+            ctx.fillStyle = '#a855f7';
+            ctx.beginPath();
+            ctx.roundRect(basket.x, basket.y, basket.w, basket.h, 8);
+            ctx.fill();
+            ctx.shadowBlur = 0; // reset
+
+            // Spawn logic
+            spawnTimer++;
+            if (spawnTimer > Math.max(25, 60 - Math.floor(score / 5))) {
+                spawnItem();
+                spawnTimer = 0;
+            }
+
+            // Update & Draw Items
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                item.y += item.speed;
+
+                // Draw Item
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = item.color;
+                ctx.fillStyle = item.color;
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Collision detection with basket
+                if (
+                    item.y + item.radius >= basket.y &&
+                    item.y - item.radius <= basket.y + basket.h &&
+                    item.x >= basket.x &&
+                    item.x <= basket.x + basket.w
+                ) {
+                    if (item.isBomb) {
+                        lives--;
+                        playSound('bomb');
+                        createExplosion(item.x, item.y, '#ef4444');
+                        updateUI();
+                        items.splice(i, 1);
+                        if (lives <= 0) {
+                            gameOver();
+                            return;
+                        }
+                    } else {
+                        score += 10;
+                        playSound('catch');
+                        createExplosion(item.x, item.y, item.color);
+                        updateUI();
+                        items.splice(i, 1);
+                    }
+                    continue;
+                }
+
+                // Remove if out of bounds
+                if (item.y > canvas.height + 20) {
+                    items.splice(i, 1);
+                }
+            }
+
+            // Update & Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.dx;
+                p.y += p.dy;
+                p.alpha -= 0.03;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
+```
